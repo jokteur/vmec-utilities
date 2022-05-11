@@ -142,7 +142,7 @@ class IndexedArray:
                     num_matches += 1
                     num_rules += 1
                 else:
-                    split = r.split(";")
+                    split = r.split("&")
                     for s in split:
                         num_rules += 1
                         try:
@@ -187,7 +187,7 @@ class IndexedArray:
         It is possible to use wildcard, such as: (2, "*"), which will remove all indices with 2 in
         the first dimension
 
-        It is possible to have a complex rule, such as: (">-1;<=3", "*"), which will remove all
+        It is possible to have a complex rule, such as: (">-1&<=3", "*"), which will remove all
         indices greater than -1 but less or equal than 3 in the first dimension
 
         The sign for number comparison should always be left to the indicated number.
@@ -206,16 +206,18 @@ class IndexedArray:
         new_descriptions = []
         new_dic = {}
         for i, idx in enumerate(self.indices):
+            num_matches = 0
             for rule in rules:
                 if len(rule) != self.dimension:
                     raise ValueError(
                         f"Dimension of rules does not correspond to IndexedArray({self.dimension})"
                     )
-                if not self.match_rule(rule, idx):
-                    new_array.append(self.array[i])
-                    new_indices.append(idx)
-                    new_descriptions.append(self.descriptions[i])
-                    new_dic[str(idx)] = len(new_array)
+                num_matches += int(self.match_rule(rule, idx))
+            if num_matches == 0:
+                new_array.append(self.array[i])
+                new_indices.append(idx)
+                new_descriptions.append(self.descriptions[i])
+                new_dic[str(idx)] = len(new_array)
 
         self.array = new_array
         self.indices = new_indices

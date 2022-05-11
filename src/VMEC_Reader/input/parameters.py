@@ -5,7 +5,7 @@ import copy
 from distutils.errors import CompileError
 import os
 from collections import OrderedDict
-from typing import Any, Dict, List, Tuple, Type, Union
+from typing import Any, Dict, Iterable, List, Tuple, Type, Union
 import numpy as np
 
 from .parser import collect_input_variables
@@ -49,6 +49,8 @@ def match_wildcard(pattern: List[str], match_to: str) -> bool:
     ------
         if the match is successful or not
     """
+    if isinstance(pattern, str):
+        pattern = pattern.split("*")
     # Match wildcards (*)
     num_matches = 0
     next_idx = 0
@@ -70,7 +72,7 @@ See InputSection() how to set this variable
 default_groups = {
     "indata": {
         "control": (
-            ["precon_type", "prec2d_threshold", "delt", "nstep", "*_array"],
+            ["prec*", "delt", "nstep", "*_array"],
             "Control parameters",
         ),
         "grid": (["lasym", "lrfp", "nfp", "mpol", "ntor", "ntheta", "nzeta"], "Grid parameters"),
@@ -119,13 +121,13 @@ class InputGroup:
         description: description of the group
         no_group_check: (bool) if no_group_check is true, then we are in the group that contains any variable in cls
         """
-        self.__cls = cls
-        self.__variables = variables
-        self.__description = description
-        self.__no_group_check = no_group_check
+        self.cls__ = cls
+        self.variables__: List[str] = variables
+        self.description__: str = description
+        self.no_group_check__: bool = no_group_check
 
     def match(self, var_name: str) -> bool:
-        for var in self.__variables:
+        for var in self.variables__:
             split = var.split("*")
             # Match wildcards (*)
             if len(split) > 1:
@@ -137,26 +139,40 @@ class InputGroup:
 
     def getVariable(self, var_name: str) -> Type["InputVariable"]:
         var_name = var_name.lower()
-        available_vars = self.__cls.variables
-        if self.match(var_name) or self.__no_group_check:
+        available_vars = self.cls__.variables
+        if self.match(var_name) or self.no_group_check__:
             if var_name in available_vars.keys():
                 return available_vars[var_name]
             else:
                 raise AttributeError(f"Attribute '{var_name}' does not exist")
         else:
-            raise AttributeError(f"Attribute '{var_name}' does not exist in '{self.__description}'")
+            raise AttributeError(f"Attribute '{var_name}' does not exist in '{self.description__}'")
 
     def addVariable(self, var_name: str, data: Any, type: type):
         var_name = var_name.lower()
-        if var_name in self.__cls.variables:
-            self.__cls.variables[var_name].data = data
-            self.__cls.variables[var_name].type = type
+        if var_name in self.cls__.variables:
+            self.cls__.variables[var_name].data = data
+            self.cls__.variables[var_name].type = type
         else:
-            self.__variables.append(var_name)
-            self.__cls.variables[var_name] = InputVariable(data, type, "", "")
+            self.variables__.append(var_name)
+            self.cls__.variables[var_name] = InputVariable(data, type, "", "")
 
     def __getattr__(self, var_name: str) -> Type["InputVariable"]:
         return self.getVariable(var_name)
+
+    def __repr__(self) -> str:
+        return f"InputGroup(Matches: {self.variables__})"
+
+    def remove_match(self, name: str):
+        """
+        Removes a variable from the group
+
+        Arguments
+        ---------
+            name: string of the match to remove in group
+        """
+        if name in self.variables__:
+            del self.variables__[self.variables__.index(name)]
 
 
 class InputSection:
@@ -182,8 +198,8 @@ class InputSection:
         self.variables: Dict[str, InputVariable] = OrderedDict()
 
         # Describe different groups
-        self.groups = OrderedDict()
-        self.name = name
+        self.groups: Dict[str, InputGroup] = OrderedDict()
+        self.name: str = name
         for group_name, (var_list, description) in groups.items():
             self.groups[group_name] = InputGroup(self, var_list, description)
         self.groups["misc"] = InputGroup(self, [], "misc", True)
@@ -227,6 +243,46 @@ class InputSection:
         else:
             raise AttributeError(f"InputSection does not have the attribute '{var_name}'")
 
+    def __repr__(self) -> str:
+        group_str = ", ".join(list(self.groups.keys()))
+        var_names = list(self.variables.keys())
+        variables_str = ""
+
+        print_dots = True
+        for i, name in enumerate(self.variables.keys()):
+            if len(var_names) > 10:
+                if i > 4 and i < len(var_names) - 5:
+                    if print_dots:
+                        variables_str += " [...] "
+                        print_dots = False
+                    continue
+            if i != 0:
+                variables_str += ", "
+            variables_str += name
+
+        return f"InputSection(Groups: {group_str} / Variables: {variables_str})"
+
+    def remove(self, var_name: str):
+        """
+        Searches the variable(s) in the section and removes it (with wildcards *)
+        """
+        to_remove = []
+        var_name = var_name.lower()
+        for name in self.variables.keys():
+            if match_wildcard(var_name, name):
+                to_remove.append(name)
+
+        for name in to_remove:
+            del self.variables[name]
+            # Remove the full variable names in group
+            for group in self.groups.values():
+                if name in group.variables__:
+                    idx = group.variables__.index(name)
+                    del group.variables__[idx]
+
+    def remove_group(self, name: str, keep_variables=False):
+        pass
+
     def to_string(self, with_comments=False) -> str:
         """
         Writes the variables of the class to a string (compatible VMEC input file)
@@ -242,7 +298,7 @@ class InputSection:
         available_vars = set(variables.keys())
 
         for group_name, group in self.groups.items():
-            iterator = group._InputGroup__variables
+            iterator = group.variables__
             if group_name == "misc":
                 iterator = ["*"]
             for var_name in iterator:
@@ -269,7 +325,7 @@ class InputSection:
             group = self.groups[group_name]
 
             # Write the group descriptions first
-            out += f"\n!{group._InputGroup__description.upper()}\n"
+            out += f"\n!{group.description__.upper()}\n"
             out += f"!{separator}\n"
             # Then write all the variables
             for var_name in var_names:
@@ -373,3 +429,42 @@ class InputFile:
             file.write("\n\n")
         file.write("&END")
         file.close()
+
+    def remove_section(self, name):
+        to_remove = []
+        for key in self.sections.keys():
+            if match_wildcard(name, key):
+                to_remove.append(key)
+        for key in to_remove:
+            self.sections.pop(key)
+
+    def remove(self, names: Union[str, Iterable[str]]):
+        """Erases a variable, group or section from the class
+
+        If a group is removed, all the variables contained in the group are removed
+
+        Arguments
+        ---------
+            names: names of the variable, group or section
+                  usage of wildcards "*" is authorized
+        """
+        if isinstance(names, str):
+            names = [names]
+
+        for name in names:
+            name = name.lower()
+            if "*" in name:
+                for section in self.sections.values():
+                    section.remove(name)
+            else:
+                attr = self.__getattr__(name)
+                if isinstance(attr, InputVariable):
+                    for section in self.sections.values():
+                        section.remove(name)
+                elif isinstance(attr, InputGroup):
+                    if name == "misc":
+                        raise ValueError("Cannot remove the group 'misc' from the input section.")
+                    for section in self.sections.values():
+                        section.remove_group(name)
+                elif isinstance(attr, InputSection):
+                    self.remove_section(name)
