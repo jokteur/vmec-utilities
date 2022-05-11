@@ -1,0 +1,9 @@
+MBUSE;;;integer;;;1;;;Number of poloidal modes
+NBUSE;;;integer;;;1;;;Number of toroidal mode
+ZEFF1;;;float;;;1;;;Effective Ion Charge
+DAMP_BS;;;float;;;1;;;Damping factor for resonance
+ATE;;;float;;;11;;;Electron temperature (10th order polynomial, keV)
+ATI;;;float;;;11;;;Ion temperature (10th order polynomial, keV)
+TEMPRES;;;float;;;1;;;Scale temperatures as P^tempres (if tempres >=0) (Set to 1 to use P profile for te/ti)
+TETI;;;float;;;1;;;Temperature ratio Te/Ti (if tempres >=0)
+DENS0;;;float;;;1;;;Central electron density in 10^20 [m^-3] (if tempres >=0)
