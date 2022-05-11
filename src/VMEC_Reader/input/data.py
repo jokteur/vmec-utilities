@@ -1,4 +1,6 @@
+from asyncore import write
 from dataclasses import dataclass
+from pydoc import writedoc
 from typing import Any, Dict, List, Tuple, Type, Union
 import numpy as np
 
@@ -16,7 +18,7 @@ class InputVariable:
     and size.
     """
 
-    data: Any
+    data: Union[np.ndarray, Type["IndexedArray"], int, float, str]
     type: type
     size: str
     description: str
@@ -110,7 +112,16 @@ class IndexedArray:
 
     def __repr__(self) -> str:
         out = "IndexedArray("
+        short_hand = len(self.array) > 10
+        write_dots = True
         for i, (val, idx, comment) in enumerate(zip(self.array, self.indices, self.descriptions)):
+            if short_hand:
+                if i > 4 and i < len(self.array) - 5:
+                    if write_dots:
+                        out += " [...] "
+                        write_dots = False
+                    continue
+
             if i != 0:
                 out += ", "
             out += f"{idx}: {val}"

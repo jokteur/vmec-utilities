@@ -5,7 +5,7 @@ import copy
 from distutils.errors import CompileError
 import os
 from collections import OrderedDict
-from typing import Any, Dict, List, Type, Union
+from typing import Any, Dict, List, Tuple, Type, Union
 import numpy as np
 
 from .parser import collect_input_variables
@@ -168,7 +168,7 @@ class InputSection:
         self,
         name: str,
         input_vars: Dict[str, InputVariable] = OrderedDict(),
-        groups: Dict[str, tuple[List[str], str]] = OrderedDict(),
+        groups: Dict[str, Tuple[List[str], str]] = OrderedDict(),
     ) -> None:
         """
         Initialize a InputSection class.
@@ -315,7 +315,7 @@ class InputFile:
     """
 
     def __init__(
-        self, path: str, groups: Dict[str, Dict[str, tuple[List[str], str]]] = default_groups
+        self, path: str, groups: Dict[str, Dict[str, Tuple[List[str], str]]] = default_groups
     ) -> None:
         """Builds an input file with multiple sections from a file.
 
