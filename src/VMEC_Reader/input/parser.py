@@ -40,7 +40,7 @@ def strdata_to_data(input: str) -> Any:
 
 def collect_input_variables(input_path: str) -> Dict[str, Dict[str, str]]:
     """
-    Reads a VMEC input file and returns a dict with all the variables and their data
+    Reads a VMEC input file and returns a dict with all the variables and their data (and comments)
 
     Note
     ----
@@ -67,19 +67,21 @@ def collect_input_variables(input_path: str) -> Dict[str, Dict[str, str]]:
     section_name = ""
 
     file = open(input_path, "r")
-    lines_with_comments = file.readlines()
 
     # Remove comments, removes complexity further down
     lines: List[str] = []
-    for line in lines_with_comments:
-        # Strip comments
-        line = line.split("!")[0]
-        if not line:  # Means that the whole line is a comment
-            continue
-        lines.append(line)
+    comments: List[str] = []
+    for line in file.readlines():
+        split = line.split("!")
+        lines.append(split[0])
+        # Only keep comments after a variable
+        if len(split) == 2 and split[0].strip():
+            comments.append(split[1])
+        else:
+            comments.append("")
 
     # Remove empty lines and spaces
-    lines = [line.strip() for line in lines if line.strip()]
+    lines = [line.strip() for line in lines]
     file_string = "\n".join(lines)
 
     class Accumulator:
@@ -155,8 +157,12 @@ def collect_input_variables(input_path: str) -> Dict[str, Dict[str, str]]:
     accumulator = Accumulator()
 
     # We have to go character by character to parse the file
+    line_number = 1
     for chr in file_string:
         new_line = chr == "\n"
+
+        if new_line:
+            line_number += 1
 
         # Sections: begin with &SECTION_NAME and ends with /
         if flag == "normal":
@@ -183,12 +189,15 @@ def collect_input_variables(input_path: str) -> Dict[str, Dict[str, str]]:
             elif chr == ",":
                 if not accumulator.is_flag_set():
                     flag = "var_name"
-                    variables[section_name][var_name] = accumulator.get()
+                    variables[section_name][var_name] = (
+                        accumulator.get(),
+                        comments[line_number - 1],
+                    )
             elif chr == "=":
                 if not accumulator.is_flag_set():
                     raise ValueError(f"Parsing error at '{accumulator.accumulator}'")
                 data, next_var_name = accumulator.get(return_tuple=True)
-                variables[section_name][var_name] = data
+                variables[section_name][var_name] = (data, comments[line_number - 2])
                 var_name = next_var_name
             elif new_line:
                 # We may or may not encounter a '=' on the next line
@@ -197,7 +206,7 @@ def collect_input_variables(input_path: str) -> Dict[str, Dict[str, str]]:
                 accumulator.set_flag()
             # If we arrive at the end of a section but no ',' has been used
             elif accumulator.is_flag_set() and chr == "/":
-                variables[section_name][var_name] = accumulator.get()
+                variables[section_name][var_name] = (accumulator.get(), comments[line_number - 1])
                 flag = "normal"
         # In string mode, only a non-escaped ' can finish the mode
         elif flag == "string":
@@ -211,13 +220,14 @@ def collect_input_variables(input_path: str) -> Dict[str, Dict[str, str]]:
         accumulator.add(chr)
 
     typed_variables: Dict[
-        str, Dict[str, Union[float, int, str, IndexedArray, np.np.ndarray]]
+        str, Dict[str, Tuple[Union[float, int, str, IndexedArray, np.np.ndarray], str]]
     ] = OrderedDict()
 
     # Once we have parsed the file, we can assign and type the different variables
     for section, dic in variables.items():
         typed_variables[section] = OrderedDict()
-        for var_name, data in dic.items():
+        for var_name, tup in dic.items():
+            data, comment = tup[0], tup[1]
             data = data.strip().strip(",")
             var_name = var_name.strip()
 
@@ -227,11 +237,12 @@ def collect_input_variables(input_path: str) -> Dict[str, Dict[str, str]]:
                 var_name = special_var[0]
                 index_tuple = tuple([int(val) for val in special_var[1][1:-1].split(",")])
                 if var_name not in typed_variables[section]:
-                    typed_variables[section][var_name] = IndexedArray(len(index_tuple))
-                # Does not support comment right now
-                typed_variables[section][var_name].add(strdata_to_data(data), index_tuple)
+                    typed_variables[section][var_name] = (IndexedArray(len(index_tuple)), "")
+                typed_variables[section][var_name][0].add(
+                    strdata_to_data(data), index_tuple, comment
+                )
             else:
                 # Test the different types of variables
-                typed_variables[section][var_name] = strdata_to_data(data)
+                typed_variables[section][var_name] = (strdata_to_data(data), comment)
 
     return typed_variables

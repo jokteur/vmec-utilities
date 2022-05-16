@@ -220,12 +220,19 @@ class InputSection:
             pass
 
         # Read the input variables
-        for var_name, data in input_vars.items():
+        for var_name, tup in input_vars.items():
             var_name = var_name.lower()
+            data, comment = tup[0], tup[1]
             if var_name in self.variables:
                 self.variables[var_name].data = data
             else:
                 self.variables[var_name] = InputVariable(data, type(data), "", "")
+            if comment:
+                desc = self.variables[var_name].description
+                if desc:
+                    self.variables[var_name].description = desc.strip() + " ; " + comment
+                else:
+                    self.variables[var_name].description = comment
 
     def __getattr__(self, var_name: str) -> Union[InputGroup, InputVariable]:
         """
