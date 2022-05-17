@@ -180,6 +180,16 @@ class FourierArray:
         sliced_array.pre_sliced = key
         return sliced_array
 
+    @property
+    def shape(self) -> tuple:
+        key = self.pre_sliced
+        if isinstance(self.pre_sliced, type(None)):
+            key = slice(None)
+
+        valid_array = self.cos_coeff if self.cos_coeff.any() else self.sin_coeff
+        outer_shape = valid_array[..., 0][key].shape
+        return outer_shape
+
     def __call__(
         self,
         theta: Union[List, np.ndarray, Numeric],
