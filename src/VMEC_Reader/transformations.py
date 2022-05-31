@@ -21,7 +21,7 @@ def fast_cos(
     mode: str,
 ):
     if mode == "2d":
-        restrict_idx = np.argwhere(n == 0)[0]
+        restrict_idx = np.argwhere(n == 0).flatten()
     else:
         restrict_idx = np.arange(len(m))
 
@@ -47,7 +47,7 @@ def fast_sin(
     mode: str,
 ):
     if mode == "2d":
-        restrict_idx = np.argwhere(n == 0)[0]
+        restrict_idx = np.argwhere(n == 0).flatten()
     else:
         restrict_idx = np.arange(len(m))
 
@@ -74,7 +74,7 @@ def fast_sincos(
     mode: str,
 ):
     if mode == "2d":
-        restrict_idx = np.argwhere(n == 0)[0]
+        restrict_idx = np.argwhere(n == 0).flatten()
     else:
         restrict_idx = np.arange(len(m))
 
@@ -279,6 +279,8 @@ class FourierArray:
             S = self.sin_coeff[corrected_key]
         else:
             S = np.array([]).astype(np.float64)
+
+        mode = mode.lower()
 
         if C.any() and S.any():
             fast_sincos(
