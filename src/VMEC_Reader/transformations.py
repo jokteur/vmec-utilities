@@ -1,29 +1,95 @@
 """
 Author: Joachim Koerfer
 """
-from audioop import tostereo
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, List, Union
 import numpy as np
 from numba import njit
+import threading
 
 from .utils import compare_shapes, Numeric, check_if_iterable
 
+executor = ThreadPoolExecutor()
+
+
+@njit(cache=True)
+def numba_cos(x):
+    return np.cos(x)
+
+
+@njit(cache=True)
+def numba_sin(x):
+    return np.sin(x)
+
 
 @njit(cache=True, nogil=True)
-def fast_cos(
+def fast_coeff(
     out_array: np.ndarray,
     outer_shape: tuple,
     theta: np.ndarray,
     phi: np.ndarray,
     n: np.ndarray,
     m: np.ndarray,
-    C: np.ndarray,
+    coeffs: np.ndarray,
     mode: str,
+    fct: str,
+    direction: str,
+    times: float,
 ):
     if mode == "2d":
         restrict_idx = np.argwhere(n == 0).flatten()
     else:
         restrict_idx = np.arange(len(m))
+
+    if direction == "theta":
+        multiply = m.astype(np.float64) * np.float64(times)
+    elif direction == "phi":
+        multiply = n.astype(np.float64) * np.float64(times)
+    else:
+        multiply = np.ones(len(m), dtype=np.float64)
+
+    phis = np.arange(len(phi))
+
+    for phi_idx in phis:
+        for outer_idx in np.ndindex(outer_shape):
+            # Theta is ellipsed, as we do vector operation on it
+            idx = (*outer_idx, phi_idx)
+            for i in restrict_idx:
+                val = m[i] * theta - n[i] * phi[phi_idx]
+                coeff_idx = (*outer_idx, i)
+                out_array[idx] += multiply[i] * coeffs[coeff_idx] * fct(val)
+
+    return out_array
+
+
+@njit(cache=True, nogil=True)
+def fast_coeff_coeff(
+    out_array: np.ndarray,
+    outer_shape: tuple,
+    theta: np.ndarray,
+    phi: np.ndarray,
+    n: np.ndarray,
+    m: np.ndarray,
+    coeffs: np.ndarray,
+    mode: str,
+    fcts: str,
+    direction: str,
+    times: float,
+):
+    if mode == "2d":
+        restrict_idx = np.argwhere(n == 0).flatten()
+    else:
+        restrict_idx = np.arange(len(m))
+
+    if direction == "theta":
+        multiply1 = m.astype(np.float64) * np.float64(times[0])
+        multiply2 = m.astype(np.float64) * np.float64(times[1])
+    elif direction == "phi":
+        multiply1 = n.astype(np.float64) * np.float64(times[0])
+        multiply2 = n.astype(np.float64) * np.float64(times[1])
+    else:
+        multiply1 = np.ones(len(m), dtype=np.float64)
+        multiply2 = np.ones(len(m), dtype=np.float64)
 
     for outer_idx in np.ndindex(outer_shape):
         for phi_idx in np.arange(len(phi)):
@@ -32,60 +98,11 @@ def fast_cos(
             for i in restrict_idx:
                 val = m[i] * theta - n[i] * phi[phi_idx]
                 coeff_idx = (*outer_idx, i)
-                out_array[idx] += C[coeff_idx] * np.cos(val)
+                out_array[idx] += multiply1 * coeffs[0][coeff_idx] * fcts[0](
+                    val
+                ) + multiply2 * coeffs[1][coeff_idx] * fcts[1](val)
 
-
-@njit(cache=True, nogil=True)
-def fast_sin(
-    out_array: np.ndarray,
-    outer_shape: tuple,
-    theta: np.ndarray,
-    phi: np.ndarray,
-    n: np.ndarray,
-    m: np.ndarray,
-    S: np.ndarray,
-    mode: str,
-):
-    if mode == "2d":
-        restrict_idx = np.argwhere(n == 0).flatten()
-    else:
-        restrict_idx = np.arange(len(m))
-
-    for outer_idx in np.ndindex(outer_shape):
-        for phi_idx in np.arange(len(phi)):
-            # Theta is ellipsed, as we do vector operation on it
-            idx = (*outer_idx, phi_idx)
-            for i in restrict_idx:
-                val = m[i] * theta - n[i] * phi[phi_idx]
-                coeff_idx = (*outer_idx, i)
-                out_array[idx] += S[coeff_idx] * np.sin(val)
-
-
-@njit(cache=True, nogil=True)
-def fast_sincos(
-    out_array: np.ndarray,
-    outer_shape: tuple,
-    theta: np.ndarray,
-    phi: np.ndarray,
-    n: np.ndarray,
-    m: np.ndarray,
-    C: np.ndarray,
-    S: np.ndarray,
-    mode: str,
-):
-    if mode == "2d":
-        restrict_idx = np.argwhere(n == 0).flatten()
-    else:
-        restrict_idx = np.arange(len(m))
-
-    for outer_idx in np.ndindex(outer_shape):
-        for phi_idx in np.arange(len(phi)):
-            # Theta is ellipsed, as we do vector operation on it
-            idx = (*outer_idx, phi_idx)
-            for i in restrict_idx:
-                val = m[i] * theta - n[i] * phi[phi_idx]
-                coeff_idx = (*outer_idx, i)
-                out_array[idx] += C[coeff_idx] * np.cos(val) + S[coeff_idx] * np.sin(val)
+    return out_array
 
 
 class FourierArray:
@@ -197,6 +214,7 @@ class FourierArray:
         mode: str = "3d",
         key: slice = None,
         derivative: Union[bool, str] = False,
+        nothreading=False,
     ) -> np.ndarray:
         """
         Evaluate the array at given points theta, phi
@@ -205,12 +223,18 @@ class FourierArray:
 
         Arguments
         ---------
-            theta: poloidal angles (can be a number or a list of angles)
-            phi : toroidal angles (can be a number or a list of angles)
+        theta: array-like
+            poloidal angles (can be a number or a list of angles)
+        phi : array-like
+            toroidal angles (can be a number or a list of angles)
             mode: if "3d", then all the harmonics are used. if "2d", then only n=0 harmonics are used
-            key: if set, then the values are calculated only on the slice defined by key
-            derivative: if set to "theta", calculates the directional derivate in theta
+        key: slice
+            if set, then the values are calculated only on the slice defined by key
+        derivative: bool or str
+            if set to "theta", calculates the directional derivate in theta
             if set to "phi", calculates the directional derivative in phi. Other value are ignored
+        nothreading: bool
+            if set to True, the calculation will be always done on a single thread
 
         Return
         ------
@@ -228,6 +252,9 @@ class FourierArray:
             theta = np.array([theta])
         if not check_if_iterable(phi):
             phi = np.array([phi])
+
+        theta = np.array(theta)
+        phi = np.array(phi)
 
         if theta.ndim > 1 or phi.ndim > 1:
             raise ValueError("Angles cannot be more than 1-dimensional")
@@ -282,43 +309,100 @@ class FourierArray:
 
         mode = mode.lower()
 
-        if C.any() and S.any():
-            fast_sincos(
-                array_out,
-                outer_shape,
-                theta.astype(np.float64),
-                phi.astype(np.float64),
-                n.astype(int),
-                m.astype(int),
-                C.astype(np.float64),
-                S.astype(np.float64),
-                mode,
-            )
-        elif C.any():
-            fast_cos(
-                array_out,
-                outer_shape,
-                theta.astype(np.float64),
-                phi.astype(np.float64),
-                n.astype(int),
-                m.astype(int),
-                C.astype(np.float64),
-                mode,
-            )
-        else:
-            fast_sin(
-                array_out,
-                outer_shape,
-                theta.astype(np.float64),
-                phi.astype(np.float64),
-                n.astype(int),
-                m.astype(int),
-                S.astype(np.float64),
-                mode,
-            )
-        return np.moveaxis(array_out, -1, -2).squeeze()
+        numba_fct = fast_coeff
+        if derivative:
+            if C.any() and S.any():
+                fcts = [numba_sin, numba_cos]
+                numba_fct = fast_coeff_coeff
+                coeffs = [C.astype(np.float64), S.astype(np.float64)]
+            elif C.any():
+                coeffs = C.astype(np.float64)
+                fcts = numba_sin
+            else:
+                coeffs = S.astype(np.float64)
+                fcts = numba_cos
 
-        if derivative == "theta":
-            pass
-        elif derivative == "phi":
-            pas
+            times = 1
+
+            if derivative == "theta":
+                if C.any() and S.any():
+                    times = [-1, 1]
+                elif C.any():
+                    times = -1
+                else:
+                    times = 1
+            elif derivative == "phi":
+                if C.any() and S.any():
+                    times = [1, -1]
+                elif C.any():
+                    times = 1
+                else:
+                    times = -1
+        else:
+            times = 1
+            if C.any() and S.any():
+                coeffs = [C.astype(np.float64), S.astype(np.float64)]
+                numba_fct = fast_coeff_coeff
+                fcts = [numba_cos, numba_sin]
+                times = [1.0, 1.0]
+            elif C.any():
+                coeffs = C.astype(np.float64)
+                fcts = numba_cos
+            else:
+                coeffs = S.astype(np.float64)
+                fcts = numba_sin
+
+        numthreads = 12  # len(executor._threads)
+        if not nothreading and len(phi) > numthreads and len(phi) > 20:
+            # A way to generate arguments on the fly without storing it into memory
+            class Args:
+                def __init__(self, phis) -> None:
+                    self.phi = phis
+
+                def __iter__(self):
+                    self.n = 0
+                    return self
+
+                def __next__(self):
+                    if self.n < len(self.phi):
+                        tmp_array = np.zeros((*outer_shape, 1, theta.shape[0]))
+                        tmp_n = self.n
+                        self.n += 1
+                        return (
+                            tmp_array,
+                            outer_shape,
+                            theta.astype(np.float64),
+                            np.array([self.phi[tmp_n]]).astype(np.float64),
+                            n.astype(int),
+                            m.astype(int),
+                            coeffs,
+                            mode,
+                            fcts,
+                            derivative,
+                            times,
+                        )
+
+                    else:
+                        raise StopIteration
+
+            args = Args(phi)
+            x = lambda arg: numba_fct(*arg)
+
+            for i, result in enumerate(executor.map(x, args)):
+                array_out[..., i, :] = result.squeeze()
+        else:
+            numba_fct(
+                array_out,
+                outer_shape,
+                theta.astype(np.float64),
+                phi.astype(np.float64),
+                n.astype(int),
+                m.astype(int),
+                coeffs,
+                mode,
+                fcts,
+                derivative,
+                times,
+            )
+
+        return np.moveaxis(array_out, -1, -2).squeeze()
