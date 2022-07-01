@@ -109,8 +109,8 @@ class CoilFile:
 
         f.writelines(["periods 1\n", "begin filament\n", "mirror NUL\n"])
 
-        for _, group in self.groups.items():
-            for i, coil in enumerate(group.coils):
+        for i, (_, group) in enumerate(self.groups.items()):
+            for coil in group.coils:
                 current = coil.currents
                 if isinstance(current, np.ndarray) or isinstance(current, list):
                     current = current[0]
@@ -118,8 +118,6 @@ class CoilFile:
                 for pt in coil.points:
                     f.write(f"   {pt[0]:.10f} {pt[1]:.10f} {pt[2]:.10f} {current}\n")
                 f.write(
-                    f"   {first_pt[0]:.10f} {first_pt[1]:.10f} {first_pt[2]:.10f} {0.0:.10f} {i+1} ! {group.name}\n"
+                    f"   {first_pt[0]:.10f} {first_pt[1]:.10f} {first_pt[2]:.10f} {0.0:.10f} {i+1} {group.name}\n"
                 )
-
-        f.write("END")
         f.close()
