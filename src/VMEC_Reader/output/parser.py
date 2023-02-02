@@ -86,7 +86,7 @@ class WoutFile:
 
             wout = netcdf_file(self.__file)
             self.__vars[var_name] = WoutVariable(
-                wout.variables[var_name][()].copy(), try_get_description(var_name)
+                np.array(wout.variables[var_name][()].copy()), try_get_description(var_name)
             )
             wout.close()
             return self.__vars[var_name]
