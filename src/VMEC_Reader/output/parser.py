@@ -7,11 +7,44 @@ from scipy.io import netcdf_file
 
 from .description import try_get_description
 
+class WoutVariable(np.ndarray):
+    def __new__(cls, input_array, description=None):
+        obj = np.asarray(input_array).view(cls)
+        obj.description = description
+        return obj
 
-@dataclass
-class WoutVariable:
-    data: np.ndarray
-    description: str
+    def __array_finalize__(self, obj):
+        if obj is None: return
+        self.description = getattr(obj, 'description', None)
+
+    def __repr__(self) -> str:
+        data_repr = super().__repr__()
+        return f"WoutVariable(\n  data: {data_repr},\n  description: {self.description}\n)"
+    
+    def __str__(self) -> str:
+        data_repr = super().__str__()
+        return f"WoutVariable(\n  data: {data_repr},\n  description: {self.description}\n)"
+
+
+class DerivedVariables:
+    def __init__(self, wout: "WoutFile") -> None:
+        self.wout = wout
+
+    def getRadialVariable(self, sqrt=True):
+        """
+        Returns the correctly calculated radial variable
+        """
+        S = None
+        # Poloidal
+        if self.wout.lrfp__logical__.data:
+            S = self.wout.chi.data / self.wout.chi.data[-1]
+        # Toroidal
+        else:
+            S = self.wout.phi.data / self.wout.phi.data[-1]
+
+        if sqrt:
+            S = np.sqrt(S)
+        return S
 
 
 class WoutFile:
@@ -31,6 +64,8 @@ class WoutFile:
 
         wout = netcdf_file(file)
         self.__names = list(wout.variables.keys())
+
+        self.derived: DerivedVariables = DerivedVariables(self)
         wout.close()
 
     def getDescriptions(self) -> Dict[str, str]:
