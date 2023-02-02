@@ -5,11 +5,15 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, List, Union
 import numpy as np
 from numba import njit
-import threading
+from numba import typed
 
 from .utils import compare_shapes, Numeric, check_if_iterable
 
 executor = ThreadPoolExecutor()
+
+
+def decorate_numba(no_numba, fct):
+    pass
 
 
 @njit(cache=True)
@@ -34,7 +38,7 @@ def fast_coeff(
     mode: str,
     fct: str,
     direction: str,
-    times: float,
+    times: np.ndarray,
 ):
     if mode == "2d":
         restrict_idx = np.argwhere(n == 0).flatten()
@@ -58,7 +62,7 @@ def fast_coeff(
                 val = m[i] * theta - n[i] * phi[phi_idx]
                 coeff_idx = (*outer_idx, i)
                 out_array[idx] += multiply[i] * coeffs[coeff_idx] * fct(val)
-
+    
     return out_array
 
 
@@ -74,9 +78,9 @@ def fast_coeff_coeff(
     mode: str,
     fcts: str,
     direction: str,
-    times: float,
+    times: np.ndarray,
 ):
-    if mode == "2d":
+    if mode == str("2d"):
         restrict_idx = np.argwhere(n == 0).flatten()
     else:
         restrict_idx = np.arange(len(m))
@@ -98,11 +102,11 @@ def fast_coeff_coeff(
             for i in restrict_idx:
                 val = m[i] * theta - n[i] * phi[phi_idx]
                 coeff_idx = (*outer_idx, i)
-                out_array[idx] += multiply1 * coeffs[0][coeff_idx] * fcts[0](
+                out_array[idx] += multiply1[i] * coeffs[0][coeff_idx]  * numba_cos(
                     val
-                ) + multiply2 * coeffs[1][coeff_idx] * fcts[1](val)
+                ) + multiply2[i] * coeffs[1][coeff_idx] * numba_sin(val)
 
-    return out_array
+    # return out_array
 
 
 class FourierArray:
@@ -132,6 +136,7 @@ class FourierArray:
             m_indices: list of m numbers
             n_indices: list of n_numbers
             cos_coeff: cosinus Fourier harmonics
+            sin_coeff: sinus Fourier harmonics
         """
         # Avoid useless copies
         if not isinstance(m_indices, np.ndarray):
@@ -177,12 +182,20 @@ class FourierArray:
                 "Size of last dimension of coefficients should be the same as the indices."
             )
 
+        valid_array = self.cos_coeff if self.cos_coeff.any() else self.sin_coeff
+        if valid_array.ndim == 1:
+            if self.cos_coeff.any():
+                self.cos_coeff = np.array([self.cos_coeff])
+            if self.sin_coeff.any():
+                self.sin_coeff = np.array([self.sin_coeff])
+
     def check_slice(self, key: slice):
         # Check if slice is valid with dimensions of coefficients
         valid_array = self.cos_coeff if self.cos_coeff.any() else self.sin_coeff
-        if valid_array.ndim == 1 and key != slice(None):
-            raise IndexError("Cannot slice a 0 dimensional array")
-        valid_array[..., 0][key]
+        if isinstance(key, np.ndarray) or key != slice(None):
+            if valid_array.ndim == 1:
+                raise IndexError("Cannot slice a 0 dimensional array")
+            valid_array[..., 0][key]
 
     def __getitem__(self, key: slice) -> "FourierArray":
         """
@@ -341,10 +354,10 @@ class FourierArray:
         else:
             times = 1
             if C.any() and S.any():
-                coeffs = [C.astype(np.float64), S.astype(np.float64)]
+                coeffs = np.array([C.astype(np.float64), S.astype(np.float64)])
                 numba_fct = fast_coeff_coeff
-                fcts = [numba_cos, numba_sin]
-                times = [1.0, 1.0]
+                fcts = 1
+                times = np.array([1.0, 1.0])
             elif C.any():
                 coeffs = C.astype(np.float64)
                 fcts = numba_cos
