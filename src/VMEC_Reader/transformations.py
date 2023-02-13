@@ -129,7 +129,7 @@ class FourierArray:
         """
         FourierArray can store and use n-dimensional coefficients
 
-        It is assumed that the last dimension of the coefficients is the dimension of the coefficients.
+        It is assumed that the last dimension of the coefficients is the dimension of the m/n coefficients.
 
         Arguments
         ---------
