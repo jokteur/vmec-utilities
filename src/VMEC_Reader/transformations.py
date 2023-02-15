@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, List, Union
 import numpy as np
 import numba as nb
+import numexpr as ne
 from numba import njit
 from numba import typed
 
@@ -418,22 +419,39 @@ class FourierArray:
         return np.moveaxis(array_out, -1, -2).squeeze()
 
 
-# @njit(cache=True, nogil=True)
-def get_mu_nv_array(xm: np.ndarray, xn: np.ndarray, theta: np.ndarray, phi: np.ndarray):
+def __slow_get_mu_nv(xm: np.ndarray, xn: np.ndarray, theta: np.ndarray, phi: np.ndarray,cos: bool):
+    m_mult_theta = np.outer(xm, theta)  # m * theta
+    n_mult_phi = np.outer(xn, phi)  # n * phi
+    # Broadcasting allows us to make the substraction in one go
+    if cos:
+        return np.cos(m_mult_theta[:, :, None] - n_mult_phi[:, None, :])
+    else:
+        return np.sin(m_mult_theta[:, :, None] - n_mult_phi[:, None, :])
+
+def __fast_get_fct_mu_nv(xm: np.ndarray, xn: np.ndarray, theta: np.ndarray, phi: np.ndarray, cos: bool):
+    theta = theta[None, :, None]
+    xm = xm[:, None, None]
+    phi = phi[ None, None, :]
+    xn = xn[:, None, None]
+    if cos:
+        return ne.evaluate("cos(xm*theta - xn*phi)")
+    else:
+        return ne.evaluate("sin(xm*theta - xn*phi)")
+
+def get_cs_mu_nv_array(xm: np.ndarray, xn: np.ndarray, theta: np.ndarray, phi: np.ndarray, cos:bool =True):
     """
     Calculates the
     m*u - n*v array from xm, xn, theta and phi.
 
+    cos==True: returns cos(mu - nv)
+    cos==false: returns sin(mu -nv)
+
     See fourier_transform for more informations.
     """
-
-    m_mult_theta = np.outer(xm, theta)  # m * theta
-    n_mult_phi = np.outer(xn, phi)  # n * phi
-    # Broadcasting allows us to make the substraction in one go
-    return m_mult_theta[:, :, None] - n_mult_phi[:, None, :]
+    return __fast_get_fct_mu_nv(xm, xn, theta, phi, cos)
 
 
-def __slow_fourier_tranform(Y, xm, xn, theta, phi, cos=True, sin=True, mu_nv=False):
+def __slow_fourier_tranform(Y, xm, xn, theta, phi, cos=True, sin=True):
     Y = np.array(Y)
     ns = len(Y)
     xm = np.array(xm)
@@ -452,13 +470,10 @@ def __slow_fourier_tranform(Y, xm, xn, theta, phi, cos=True, sin=True, mu_nv=Fal
     cos_coeff = np.zeros((ns, nmodes))
     sin_coeff = np.zeros((ns, nmodes))
 
-    if not isinstance(mu_nv, np.ndarray):
-        mu_nv = get_mu_nv_array(xm, xn, theta, phi)
-
     if cos:
-        cos_mu_nv = np.cos(mu_nv)
+        cos_mu_nv = get_cs_mu_nv_array(xm, xn, theta, phi, True)
     if sin:
-        sin_mu_nv = np.sin(mu_nv)
+        sin_mu_nv = get_cs_mu_nv_array(xm, xn, theta, phi, False)
 
     factor = 1 / (2 * np.pi**2) * dtheta * dphi
     if cos:
@@ -480,8 +495,7 @@ def fourier_transform(
     theta: np.ndarray,
     phi: np.ndarray,
     cos: bool = True,
-    sin: bool = True,
-    mn_uv: Union[None, np.ndarray]=None,
+    sin: bool = True
 ):
     """
     Returns the (cos/sin) Fourier coefficients for any array.
@@ -510,10 +524,7 @@ def fourier_transform(
         if True, takes cos coefficients into account. if False, the cos coefficient array is always zeros.
     sin: bool
         if True, takes sin coefficients into account. if False, the sin coefficient array is always zeros.
-    mu_nv: None or array-like
-        it is possible to give the precalculated m*u - n*v (of shape (len(xm), len(theta), len(phi))) array
-        if nothing is given, then the function automatically calculates the necessary array.
-
+    
     Notes
     -----
     The coefficients are given by:
@@ -537,11 +548,6 @@ def fourier_transform(
         raise ValueError("Bad input shapes for xm or xn")
     if len(xm) != len(xn):
         raise ValueError("xm and xn should have the same length")
-    expected_shape = (len(xm), ntheta, nphi)
-    if isinstance(mn_uv, np.ndarray) and mn_uv.shape != expected_shape:
-        raise ValueError(
-            f"mu_nv array does not have the correct shape. Given {mn_uv.shape} instead of {expected_shape}"
-        )
     if Y.ndim < 2:
         raise ValueError("Input array should be at least 2-dimensional")
     if Y.shape[-2] != ntheta or Y.shape[-1] != nphi:
