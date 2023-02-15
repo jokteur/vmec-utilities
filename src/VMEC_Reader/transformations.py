@@ -4,6 +4,7 @@ Author: Joachim Koerfer
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, List, Union
 import numpy as np
+import numba as nb
 from numba import njit
 from numba import typed
 
@@ -62,7 +63,7 @@ def fast_coeff(
                 val = m[i] * theta - n[i] * phi[phi_idx]
                 coeff_idx = (*outer_idx, i)
                 out_array[idx] += multiply[i] * coeffs[coeff_idx] * fct(val)
-    
+
     return out_array
 
 
@@ -102,9 +103,9 @@ def fast_coeff_coeff(
             for i in restrict_idx:
                 val = m[i] * theta - n[i] * phi[phi_idx]
                 coeff_idx = (*outer_idx, i)
-                out_array[idx] += multiply1[i] * coeffs[0][coeff_idx]  * numba_cos(
-                    val
-                ) + multiply2[i] * coeffs[1][coeff_idx] * numba_sin(val)
+                out_array[idx] += multiply1[i] * coeffs[0][coeff_idx] * numba_cos(val) + multiply2[i] * coeffs[1][
+                    coeff_idx
+                ] * numba_sin(val)
 
     # return out_array
 
@@ -161,9 +162,7 @@ class FourierArray:
         self.pre_sliced = None
 
         if not self.cos_coeff.any() and not self.sin_coeff.any():
-            raise ValueError(
-                "At least one series of coefficients (either sinus or cosinus) must be given"
-            )
+            raise ValueError("At least one series of coefficients (either sinus or cosinus) must be given")
 
         if not compare_shapes(self.m_indices.shape, self.n_indices.shape):
             raise ValueError("m and n indices have different shapes")
@@ -178,9 +177,7 @@ class FourierArray:
             or self.sin_coeff.any()
             and self.sin_coeff.shape[-1] != self.m_indices.shape[0]
         ):
-            raise ValueError(
-                "Size of last dimension of coefficients should be the same as the indices."
-            )
+            raise ValueError("Size of last dimension of coefficients should be the same as the indices.")
 
         valid_array = self.cos_coeff if self.cos_coeff.any() else self.sin_coeff
         if valid_array.ndim == 1:
@@ -419,3 +416,142 @@ class FourierArray:
             )
 
         return np.moveaxis(array_out, -1, -2).squeeze()
+
+
+# @njit(cache=True, nogil=True)
+def get_mu_nv_array(xm: np.ndarray, xn: np.ndarray, theta: np.ndarray, phi: np.ndarray):
+    """
+    Calculates the
+    m*u - n*v array from xm, xn, theta and phi.
+
+    See fourier_transform for more informations.
+    """
+
+    m_mult_theta = np.outer(xm, theta)  # m * theta
+    n_mult_phi = np.outer(xn, phi)  # n * phi
+    # Broadcasting allows us to make the substraction in one go
+    return m_mult_theta[:, :, None] - n_mult_phi[:, None, :]
+
+
+def __slow_fourier_tranform(Y, xm, xn, theta, phi, cos=True, sin=True, mu_nv=False):
+    Y = np.array(Y)
+    ns = len(Y)
+    xm = np.array(xm)
+    xn = np.array(xn)
+    nmodes = len(xm)
+    theta = np.array(theta)
+    phi = np.array(phi)
+    ntheta = len(theta)
+    nphi = len(phi)
+
+    dtheta = np.max(theta) / ntheta
+    dphi = np.max(phi) / nphi
+
+    zero_idx = np.where((xm == 0).astype(bool) & (xn == 0).astype(bool))[0][0]
+
+    cos_coeff = np.zeros((ns, nmodes))
+    sin_coeff = np.zeros((ns, nmodes))
+
+    if not isinstance(mu_nv, np.ndarray):
+        mu_nv = get_mu_nv_array(xm, xn, theta, phi)
+
+    if cos:
+        cos_mu_nv = np.cos(mu_nv)
+    if sin:
+        sin_mu_nv = np.sin(mu_nv)
+
+    factor = 1 / (2 * np.pi**2) * dtheta * dphi
+    if cos:
+        for s in range(ns):
+            cos_coeff[s] = factor * np.sum(Y[s] * cos_mu_nv, axis=(-2, -1))
+            cos_coeff[s, zero_idx] /= 2
+    if sin:
+        for s in range(ns):
+            sin_coeff[s] = factor * np.sum(Y[s] * sin_mu_nv, axis=(-2, -1))
+            sin_coeff[s, zero_idx] /= 2
+
+    return cos_coeff, sin_coeff
+
+
+def fourier_transform(
+    Y: np.ndarray,
+    xm: np.ndarray,
+    xn: np.ndarray,
+    theta: np.ndarray,
+    phi: np.ndarray,
+    cos: bool = True,
+    sin: bool = True,
+    mn_uv: Union[None, np.ndarray]=None,
+):
+    """
+    Returns the (cos/sin) Fourier coefficients for any array.
+
+    The Fourier transformation is given by:
+
+    Y(s,u,v) = \sum_{m,n}Y_{m,n}^c cos(mu-nv) + Y_{m,n}^s sin(mu - nv)
+
+    Returns the Y_{m,n}^c and/or Y_{m,n}^s coefficients for the desired input Y
+
+    Arguments
+    ---------
+    Y: array-like
+        input array in real space, where the last two dimensions are of the same shape as theta and phi
+    xm: array-like
+        1d m number array (should have the same length as xn)
+        xm and xn together form the mode array: (xm[i],xn[i]) is a mode
+    xn: array-like
+        1d n number array (should have the same length as xm)
+        xm and xn together form the mode array. (xm[i],xn[i]) is a mode
+    theta: array-like
+        theta points to evaluate against. Should be linearly spaced
+    phi: array-like
+        phi points to evaluate against. Should be linearly spaced
+    cos: bool
+        if True, takes cos coefficients into account. if False, the cos coefficient array is always zeros.
+    sin: bool
+        if True, takes sin coefficients into account. if False, the sin coefficient array is always zeros.
+    mu_nv: None or array-like
+        it is possible to give the precalculated m*u - n*v (of shape (len(xm), len(theta), len(phi))) array
+        if nothing is given, then the function automatically calculates the necessary array.
+
+    Notes
+    -----
+    The coefficients are given by:
+    $Y_{m,n}^c(s) = \frac{1}{2\pi^2}\int_0^{2\pi}\int_0^{2\pi}Y(s,u,v)\cos(mu-nv)dudv$   for m != 0 and n != 0
+    $Y_{0,0}^c(s) = \frac{1}{4\pi^2}\int_0^{2\pi}\int_0^{2\pi}Y(s,u,v)dudv$
+
+    $Y_{m,n}^s(s) = \frac{1}{2\pi^2}\int_0^{2\pi}\int_0^{2\pi}Y(s,u,v)\sin(mu-nv)dudv$   for m != 0 and n != 0
+    $Y_{0,0}^s(s) = \frac{1}{4\pi^2}\int_0^{2\pi}\int_0^{2\pi}Y(s,u,v)dudv$
+    """
+    Y = np.array(Y)
+    ns = len(Y)
+    xm = np.array(xm)
+    xn = np.array(xn)
+    theta = np.array(theta)
+    phi = np.array(phi)
+    ntheta = len(theta)
+    nphi = len(phi)
+    if theta.ndim > 1 or phi.ndim > 1:
+        raise ValueError("Angles cannot be more than 1-dimensional")
+    if xm.ndim > 1 or xn.ndim > 1:
+        raise ValueError("Bad input shapes for xm or xn")
+    if len(xm) != len(xn):
+        raise ValueError("xm and xn should have the same length")
+    expected_shape = (len(xm), ntheta, nphi)
+    if isinstance(mn_uv, np.ndarray) and mn_uv.shape != expected_shape:
+        raise ValueError(
+            f"mu_nv array does not have the correct shape. Given {mn_uv.shape} instead of {expected_shape}"
+        )
+    if Y.ndim < 2:
+        raise ValueError("Input array should be at least 2-dimensional")
+    if Y.shape[-2] != ntheta or Y.shape[-1] != nphi:
+        raise ValueError(
+            f"Last two dimensions of Y ({Y.shape[-2]},{Y.shape[-1]}) do not correspond to theta (len={ntheta}) or phi (len={nphi})"
+        )
+
+    if Y.ndim == 2:
+        Y = Y.reshape(1, ntheta, nphi)
+
+    cos_coeff, sin_coeff = __slow_fourier_tranform(Y, xm, xn, theta, phi, cos, sin)
+
+    return cos_coeff, sin_coeff
