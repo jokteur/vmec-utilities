@@ -24,14 +24,14 @@ prec2d_threshold;;;float;;;1;;;
 am;;;float;;;0:20;;;Mass or Pressure (gamma=0) expansion coefficients
 ai;;;float;;;0:20;;;Iota expansion coefficients
 ac;;;float;;;0:20;;;Toroidal current density expansion coefficients
-ac_aux_s;;;float;;;list;;;
-ac_aux_f;;;float;;;list;;;
-ai_aux_s;;;float;;;list;;;
-ai_aux_f;;;float;;;list;;;
-am_aux_s;;;float;;;list;;;
-am_aux_f;;;float;;;list;;;
-at;;;float;;;list;;;
-ah;;;float;;;list;;;
+ac_aux_s;;;float;;;list;;;Toroidal current density for splines, s values
+ac_aux_f;;;float;;;list;;;Toroidal current density for splines, function values
+ai_aux_s;;;float;;;list;;;Iota for splines, s values
+ai_aux_f;;;float;;;list;;;Iota for splines, function values
+am_aux_s;;;float;;;list;;;Mass or Pressure (gamma=0) for splines, s values
+am_aux_f;;;float;;;list;;;Mass or Pressure (gamma=0) for splines, function values
+at;;;float;;;list;;;Temperature profile expansion coefficients
+ah;;;float;;;list;;;Rotation profile expansion coefficients
 bcrit;;;float;;;list;;;
 aphi;;;float;;;0:20;;;Deprecated parameters.
 ns_array;;;integer;;;100;;;Number of radial grid points for each grid iteration
@@ -66,7 +66,7 @@ piota_type;;;str;;;20;;;Iota Profile type
 pmass_type;;;str;;;20;;;Pressure (mass) profile type
 phidiam;;;float;;;1;;;Diamagnetic toroidal flux [Wb].
 psa;;;float;;;100;;; 
-pfa;;;real(12,100;;;100;;; 
+pfa;;;real(12,100);;;100;;; 
 isa;;;float;;;100;;; 
 ifa;;;float;;;100;;; 
 sigma_current;;;float;;;1;;;Standard deviation in toroidal current [A]. Standard deviations <0 are interpreted as percent of respective measurement.
