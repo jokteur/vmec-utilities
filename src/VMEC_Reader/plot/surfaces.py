@@ -17,9 +17,11 @@ def RZ_surfaces(
     magnetic_axis: bool = True,
     num_theta: int = 100,
     suptitle: str = "Magnetic surfaces",
+    phi_titles=None,
     fig_kwargs: dict = {},
     plt_kwargs: dict = {"marker": None, "c": "k", "linewidth": 1},
     mode="3D",
+    clever_ticks=False,
     show=True,
 ):
     """
@@ -107,9 +109,20 @@ def RZ_surfaces(
 
     for i, phi in enumerate(phi_angles):
         ax = axs[i]
-        ax.set_title(rf"$\phi = {np.round(phi, 3)}$")
-        ax.set_xlabel(r"$R$ (m)")
-        ax.set_ylabel(r"$Z$ (m)")
+        if phi_titles:
+            ax.set_title(phi_titles[i])
+        else:
+            ax.set_title(rf"$\phi = {np.round(phi, 3)}$")
+        if clever_ticks:
+            if i // 2 == 1:
+                ax.set_xlabel(r"$R$ (m)")
+            if i % 2 == 0:
+                ax.set_ylabel(r"$Z$ (m)")
+            if i < 2:
+                ax.set_xticks([])
+        else:
+            ax.set_xlabel(r"$R$ (m)")
+            ax.set_ylabel(r"$Z$ (m)")
         ax.set_ylim(Zmin, Zmax)
         ax.set_xlim(Rmin, Rmax)
         ax.set_aspect("equal")

@@ -163,6 +163,7 @@ class FourierArray:
         self.pre_sliced = None
 
         if not self.cos_coeff.any() and not self.sin_coeff.any():
+            print(self.cos_coeff.any())
             raise ValueError("At least one series of coefficients (either sinus or cosinus) must be given")
 
         if not compare_shapes(self.m_indices.shape, self.n_indices.shape):
