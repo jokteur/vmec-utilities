@@ -19,7 +19,7 @@ class Profile:
     # beware that in case of power series, in vmec the coefficients are in reverse order. Here we use numpy's convention
     data: np.ndarray
 
-    def to_rho_representation(self, poly_resolution: int = None):
+    def to_rho_representation(self, poly_resolution: int = None) -> "Profile":
         """Converts the profile to a rho= sqrt(Psi / Psi_b) representation"""
         out = Profile(self.name, self.unit, self.ptype, "rho", self.xs, self.data)
 
@@ -37,7 +37,7 @@ class Profile:
 
         return out
 
-    def to_rho_sq_representation(self):
+    def to_rho_sq_representation(self) -> "Profile":
         """Converts the profile to a rho_sq = Psi / Psi_b representation"""
         out = Profile(self.name, self.unit, self.ptype, "rho_sq", self.xs, self.data)
 
@@ -53,7 +53,7 @@ class Profile:
 
         return out
 
-    def to_ptype(self, new_ptype: str, x_resolution: int = 99, poly_resolution: int = 10):
+    def to_ptype(self, new_ptype: str, x_resolution: int = 99, poly_resolution: int = 10) -> "Profile":
         """Change underlying representation of the profile (power_series, cubic_spline)"""
         out = Profile(self.name, self.unit, new_ptype, self.radial_coordinate, self.xs, self.data)
 
@@ -69,7 +69,7 @@ class Profile:
 
         return out
 
-    def transform(self, func, poly_resolution: int = None, new_unit: str = ""):
+    def transform(self, func, poly_resolution: int = None, new_unit: str = "") -> "Profile":
         """Transforms the profile using a custom function
 
         Arguments:
