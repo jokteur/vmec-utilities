@@ -7,6 +7,7 @@ from scipy.io import netcdf_file
 
 from .description import try_get_description
 
+
 class WoutVariable(np.ndarray):
     def __new__(cls, input_array, description=None):
         obj = np.asarray(input_array).view(cls)
@@ -14,16 +15,21 @@ class WoutVariable(np.ndarray):
         return obj
 
     def __array_finalize__(self, obj):
-        if obj is None: return
-        self.description = getattr(obj, 'description', None)
+        if obj is None:
+            return
+        self.description = getattr(obj, "description", None)
 
     def __repr__(self) -> str:
         data_repr = super().__repr__()
-        return f"WoutVariable(\n  data: {data_repr},\n  description: {self.description}\n)"
-    
+        return (
+            f"WoutVariable(\n  data: {data_repr},\n  description: {self.description}\n)"
+        )
+
     def __str__(self) -> str:
         data_repr = super().__str__()
-        return f"WoutVariable(\n  data: {data_repr},\n  description: {self.description}\n)"
+        return (
+            f"WoutVariable(\n  data: {data_repr},\n  description: {self.description}\n)"
+        )
 
 
 class DerivedVariables:
@@ -86,7 +92,8 @@ class WoutFile:
 
             wout = netcdf_file(self.__file)
             self.__vars[var_name] = WoutVariable(
-                np.array(wout.variables[var_name][()].copy()), try_get_description(var_name)
+                np.array(wout.variables[var_name][()].copy()),
+                try_get_description(var_name),
             )
             wout.close()
             return self.__vars[var_name]
