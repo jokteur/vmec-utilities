@@ -9,7 +9,7 @@ from ..transformations import FourierArray
 from ..utils import check_if_iterable
 
 
-def RZ_surfaces(
+def plot_RZ_surfaces(
     R: FourierArray,
     Z: FourierArray,
     surfaces: Union[int, np.ndarray, List] = 10,
@@ -128,7 +128,10 @@ def RZ_surfaces(
         ax.set_aspect("equal")
 
         for s in range(len(surfaces)):
-            ax.plot(Rs[s, :, i], Zs[s, :, i], **plt_kwargs)
+            if R.shape[0] == 1:
+                ax.plot(Rs[:, i], Zs[:, i], **plt_kwargs)
+            else:
+                ax.plot(Rs[s, :, i], Zs[s, :, i], **plt_kwargs)
 
     if show:
         plt.show()
