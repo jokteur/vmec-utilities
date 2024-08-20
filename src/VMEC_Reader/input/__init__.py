@@ -1,9 +1,10 @@
 from .parser import collect_input_variables
 from .data import IndexedArray
 from .parameters import InputFile, InputGroup, InputSection, InputVariable
-from .profiles import Profile, get_pressure, get_safety, get_iota, get_rotation, get_temperature
+from .profiles import Profile, get_pressure, get_safety, get_iota, get_rotation, get_temperature, set_profile
 from .coils import CoilFile, Coil, CoilGroup
 from .surface import input_file_surface
+from .helpers import set_poloidal_flux_mode, set_toroidal_flux_mode
 
 __all__ = [
     "collect_input_variables",
@@ -22,4 +23,7 @@ __all__ = [
     "Coil",
     "CoilGroup",
     "input_file_surface",
+    "set_profile",
+    "set_poloidal_flux_mode",
+    "set_toroidal_flux_mode",
 ]

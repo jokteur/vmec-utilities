@@ -8,6 +8,7 @@ from collections import OrderedDict
 from typing import Any, Dict, Iterable, List, Tuple, Type, Union
 import numpy as np
 
+from .files.sections import sections, varname_to_section
 from .parser import collect_input_variables
 from .data import IndexedArray, InputVariable
 from ..utils import check_if_iterable
@@ -97,6 +98,7 @@ default_groups = {
             ["phiedge", "raxis", "zaxis", "rbc*", "rbs*", "zbc*", "zbs*"],
             "Boundary conditions",
         ),
+        "other": ([], "Other parameters"),
     }
 }
 
@@ -148,7 +150,7 @@ class InputGroup:
         else:
             raise AttributeError(f"Attribute '{var_name}' does not exist in '{self.description__}'")
 
-    def addVariable(self, var_name: str, data: Any, type: type):
+    def set_variable(self, var_name: str, data: Any, type: type):
         var_name = var_name.lower()
         if var_name in self.cls__.variables:
             self.cls__.variables[var_name].data = data
@@ -371,7 +373,6 @@ class InputSection:
 
         return out
 
-
 class InputFile:
     """
     Class for writing an input file, with multiple sections
@@ -421,6 +422,15 @@ class InputFile:
                     return section.variables[attr]
 
         raise AttributeError(f"Could not find '{attr}' anywhere in the input file.")
+    
+    def set_variable(self, var_name: str, data: Any, type: type):
+        """
+        Sets a variable in the input file (not for bootstrap variables)
+        """
+        section_name = varname_to_section(var_name)
+
+        group = self.indata.__getattr__(section_name)
+        group.set_variable(var_name, data, type)
 
     def add_section(self, name: str, input_vars: Dict[str, InputVariable] = OrderedDict()):
         """

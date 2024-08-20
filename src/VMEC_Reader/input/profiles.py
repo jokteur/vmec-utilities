@@ -83,11 +83,13 @@ class Profile:
         elif self.ptype == "power_series":
             if not poly_resolution:
                 poly_resolution = len(self.data)
-            ys = func(np.polyval(self.data, self.xs))
-            out.data = np.polyfit(self.xs, ys, poly_resolution)
+            xs = np.linspace(0, 1, 100)
+            ys = func(np.polyval(self.data, xs))
+            print(ys)
+            out.data = np.polyfit(xs, ys, poly_resolution)
 
         return out
-    
+
     def get_xy(self, x_resolution: int = 100):
         """Returns the x and y values of the profile"""
         if self.ptype == "power_series":
@@ -98,6 +100,18 @@ class Profile:
             ys = self.data
 
         return xs, ys
+
+
+def set_profile(input_file: InputFile, profile: Profile, pname: str, short_name: str):
+    """
+    Sets the profile in the VMEC input file.
+    """
+    input_file.set_variable(f"{pname}_type", profile.ptype, str)
+    if profile.ptype == "power_series":
+        input_file.set_variable(short_name, profile.data[::-1], float)
+    else:
+        input_file.set_variable(f"{short_name}_aux_s", profile.xs, float)
+        input_file.set_variable(f"{short_name}_aux_f", profile.data, float)
 
 
 def _get_mass_or_pressure(input: InputFile, name: str) -> Profile:

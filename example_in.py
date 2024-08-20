@@ -30,7 +30,7 @@ input.remove(["ntheta", "mpol"])
 input.remove("n*")
 
 # Add a variable
-input.indata.Control.addVariable("test", data=[1, 2, 3], type=int)
+input.indata.Control.set_variable("test", data=[1, 2, 3], type=int)
 
 # Modify a variable.
 # A variable is an InputVariable class, which contains
