@@ -10,18 +10,19 @@ from ..utils import check_if_iterable
 
 
 def plot_RZ_surfaces(
-    R: FourierArray,
-    Z: FourierArray,
+    R: Union[FourierArray, List[FourierArray]],
+    Z: Union[FourierArray, List[FourierArray]],
     surfaces: Union[int, np.ndarray, List] = 10,
     phi_angles: Union[float, np.ndarray, List] = 0.0,
+    labels: str = None,
     magnetic_axis: bool = True,
     num_theta: int = 100,
     suptitle: str = "Magnetic surfaces",
     phi_titles=None,
     fig_kwargs: dict = {},
-    plt_kwargs: dict = {"marker": None, "c": "k", "linewidth": 1},
+    plt_kwargs: dict = {"marker": None, "linewidth": 1},
     mode="3D",
-    clever_ticks=False,
+    shared_axis=True,
     show=True,
 ):
     """
@@ -29,9 +30,9 @@ def plot_RZ_surfaces(
 
     Arguments
     ---------
-        R: FourierArray
+        R: FourierArray or List of FourierArrays
             R Fourier coefficients of the surfaces
-        Z: FourierArray
+        Z: FourierArray or List of FourierArrays
             Z Fourier coefficients of the surfaces
         surfaces: int or Iterable
             if an int is given, the it will plot a linear distribution of the surfaces
@@ -40,6 +41,10 @@ def plot_RZ_surfaces(
         phi_angles: float or Iterable
             at which phi angles the surface must be represented
             if only a float, plots only one angle
+        labels: str or None
+            if supplied, list of labels for the list of R and Z (for comparing plots)
+        colors: str or None
+            if supplied, list of colors for the list of R and Z (for comparing plots)
         magnetic_axis: bool
             plot the magnetic axis at the current angle
         num_theta: int
@@ -77,29 +82,43 @@ def plot_RZ_surfaces(
     else:
         phi_angles = [phi_angles]
 
+    R_list = R
+    Z_list = Z
+
+    colors = ["k", "r", "b", "g", "m", "c", "y"]
+
+    if isinstance(R_list, list) or isinstance(Z_list, list):
+        if not isinstance(R_list, list) or not isinstance(Z_list, list):
+            raise ValueError("If one R or Z is supplied as a list, both must be lists")
+        if len(R_list) != len(Z_list):
+            raise ValueError("R and Z lists must have the same length")
+        if labels is not None:
+            if len(label) != len(R_list):
+                raise ValueError("Label list must have the same length as R and Z")
+        if isinstance(plt_kwargs, list) and len(plt_kwargs) != len(R_list):
+            raise ValueError("plt_kwargs list must have the same length as R and Z")
+    else:
+        R_list = [R]
+        Z_list = [Z]
+
+    if labels is None:
+        labels = [""] * len(R_list)
+    
+    if isinstance(plt_kwargs, dict):
+        tmp = []
+        for i in range(len(R_list)):
+            kwargs = plt_kwargs.copy()
+            if "c" not in kwargs:
+                kwargs["c"] = colors[i]
+            tmp.append(kwargs)
+        plt_kwargs = tmp
+
     phi_angles = np.array(phi_angles)
 
     if isinstance(surfaces, int):
-        surfaces = np.linspace(0, R.shape[0] - 1, surfaces).astype(int)
+        surfaces = np.linspace(0, R_list[0].shape[0] - 1, surfaces).astype(int)
 
     theta = np.linspace(0, 2 * np.pi, num_theta)
-
-    Rs = R[surfaces](theta, phi_angles, mode=mode)
-    Zs = Z[surfaces](theta, phi_angles, mode=mode)
-
-    if len(phi_angles) == 1:
-        Rs = Rs[..., np.newaxis]
-        Zs = Zs[..., np.newaxis]
-
-    Rmin, Rmax = np.min(Rs), np.max(Rs)
-    Zmin, Zmax = np.min(Zs), np.max(Zs)
-
-    margin_R = (Rmax - Rmin) / 10
-    margin_Z = (Zmax - Zmin) / 10
-    Rmin -= margin_R
-    Rmax += margin_R
-    Zmin -= margin_Z
-    Zmax += margin_Z
 
     fig = plt.figure(**fig_kwargs)
     fig.suptitle(suptitle)
@@ -107,31 +126,49 @@ def plot_RZ_surfaces(
     gs = gridspec.GridSpec(xlen, ylen)
     axs = [plt.subplot(gs[i]) for i in range(num_plots)]
 
-    for i, phi in enumerate(phi_angles):
-        ax = axs[i]
-        if phi_titles:
-            ax.set_title(phi_titles[i])
-        else:
-            ax.set_title(rf"$\phi = {np.round(phi, 3)}$")
-        if clever_ticks:
-            if i // 2 == 1:
-                ax.set_xlabel(r"$R$ (m)")
-            if i % 2 == 0:
-                ax.set_ylabel(r"$Z$ (m)")
-            if i < 2:
-                ax.set_xticks([])
-        else:
-            ax.set_xlabel(r"$R$ (m)")
-            ax.set_ylabel(r"$Z$ (m)")
-        ax.set_ylim(Zmin, Zmax)
-        ax.set_xlim(Rmin, Rmax)
-        ax.set_aspect("equal")
+    for i, (R, Z) in enumerate(zip(R_list, Z_list)):
+        Rs = R[surfaces](theta, phi_angles, mode=mode)
+        Zs = Z[surfaces](theta, phi_angles, mode=mode)
 
-        for s in range(len(surfaces)):
-            if R.shape[0] == 1:
-                ax.plot(Rs[:, i], Zs[:, i], **plt_kwargs)
+        if len(phi_angles) == 1:
+            Rs = Rs[..., np.newaxis]
+            Zs = Zs[..., np.newaxis]
+
+        Rmin, Rmax = np.min(Rs), np.max(Rs)
+        Zmin, Zmax = np.min(Zs), np.max(Zs)
+
+        margin_R = (Rmax - Rmin) / 10
+        margin_Z = (Zmax - Zmin) / 10
+        Rmin -= margin_R
+        Rmax += margin_R
+        Zmin -= margin_Z
+        Zmax += margin_Z
+
+        for j, phi in enumerate(phi_angles):
+            ax = axs[j]
+            if phi_titles:
+                ax.set_title(phi_titles[j])
             else:
-                ax.plot(Rs[s, :, i], Zs[s, :, i], **plt_kwargs)
+                ax.set_title(rf"$\phi = {np.round(phi, 3)}$")
+            if shared_axis:
+                if j // 2 == 1:
+                    ax.set_xlabel(r"$R$ (m)")
+                if j % 2 == 0:
+                    ax.set_ylabel(r"$Z$ (m)")
+                if j < 2:
+                    ax.set_xticks([])
+            else:
+                ax.set_xlabel(r"$R$ (m)")
+                ax.set_ylabel(r"$Z$ (m)")
+            ax.set_ylim(Zmin, Zmax)
+            ax.set_xlim(Rmin, Rmax)
+            ax.set_aspect("equal")
+
+            for s in range(len(surfaces)):
+                if R.shape[0] == 1:
+                    ax.plot(Rs[:, j], Zs[:, j], label=labels[i], **plt_kwargs[i])
+                else:
+                    ax.plot(Rs[s, :, j], Zs[s, :, j], label=labels[i], **plt_kwargs[i])
 
     if show:
         plt.show()
