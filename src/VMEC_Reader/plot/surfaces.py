@@ -93,7 +93,7 @@ def plot_RZ_surfaces(
         if len(R_list) != len(Z_list):
             raise ValueError("R and Z lists must have the same length")
         if labels is not None:
-            if len(label) != len(R_list):
+            if len(labels) != len(R_list):
                 raise ValueError("Label list must have the same length as R and Z")
         if isinstance(plt_kwargs, list) and len(plt_kwargs) != len(R_list):
             raise ValueError("plt_kwargs list must have the same length as R and Z")
@@ -115,8 +115,6 @@ def plot_RZ_surfaces(
 
     phi_angles = np.array(phi_angles)
 
-    if isinstance(surfaces, int):
-        surfaces = np.linspace(0, R_list[0].shape[0] - 1, surfaces).astype(int)
 
     theta = np.linspace(0, 2 * np.pi, num_theta)
 
@@ -125,10 +123,23 @@ def plot_RZ_surfaces(
 
     gs = gridspec.GridSpec(xlen, ylen)
     axs = [plt.subplot(gs[i]) for i in range(num_plots)]
+    plot_lines = [None] * len(labels)
 
     for i, (R, Z) in enumerate(zip(R_list, Z_list)):
-        Rs = R[surfaces](theta, phi_angles, mode=mode)
-        Zs = Z[surfaces](theta, phi_angles, mode=mode)
+        surfaces_idx = surfaces
+        if isinstance(surfaces, int):
+            if R.shape[0] == 1:
+                surfaces_idx = None
+            elif surfaces > R.shape[0]:
+                surfaces_idx = np.linspace(0, R.shape[0] - 1, R.shape[0] - 1).astype(int)
+            else:
+                surfaces_idx = np.linspace(0, R.shape[0] - 1, surfaces).astype(int)
+
+        print(surfaces_idx, labels[i])
+
+        Rs = R[surfaces_idx](theta, phi_angles, mode=mode)
+        Zs = Z[surfaces_idx](theta, phi_angles, mode=mode)
+
 
         if len(phi_angles) == 1:
             Rs = Rs[..., np.newaxis]
@@ -150,7 +161,7 @@ def plot_RZ_surfaces(
                 ax.set_title(phi_titles[j])
             else:
                 ax.set_title(rf"$\phi = {np.round(phi, 3)}$")
-            if shared_axis:
+            if shared_axis and len(phi_angles) > 2:
                 if j // 2 == 1:
                     ax.set_xlabel(r"$R$ (m)")
                 if j % 2 == 0:
@@ -164,11 +175,14 @@ def plot_RZ_surfaces(
             ax.set_xlim(Rmin, Rmax)
             ax.set_aspect("equal")
 
-            for s in range(len(surfaces)):
-                if R.shape[0] == 1:
-                    ax.plot(Rs[:, j], Zs[:, j], label=labels[i], **plt_kwargs[i])
-                else:
-                    ax.plot(Rs[s, :, j], Zs[s, :, j], label=labels[i], **plt_kwargs[i])
+            if R.shape[0] == 1:
+                plot_lines[i] = ax.plot(Rs[:, j], Zs[:, j], label=labels[i], **plt_kwargs[i])[0]
+            else:
+                for s in range(len(surfaces_idx)):
+                    plot_lines[i] = ax.plot(Rs[s, :, j], Zs[s, :, j], label=labels[i], **plt_kwargs[i])[0]
+
+    if labels[0]:
+        fig.legend(plot_lines, labels, loc="center")
 
     if show:
         plt.show()

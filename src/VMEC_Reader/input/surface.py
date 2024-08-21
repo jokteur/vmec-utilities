@@ -1,9 +1,10 @@
 from .parameters import InputFile
 from ..transformations import FourierArray, fourier_transform
+from typing import Tuple
 
 import numpy as np
 
-def input_file_surface(input_file: InputFile) -> FourierArray:
+def input_file_surface(input_file: InputFile) -> Tuple[FourierArray, FourierArray]:
     """
     Converts the input file surface guess to a FourierArray
 
@@ -32,7 +33,9 @@ def input_file_surface(input_file: InputFile) -> FourierArray:
     if rbc.indices != zbs.indices:
         raise ValueError("The rbc and zbs variables should have the same mode indices")
     
-    xm = [t[0] for t in rbc.indices]
-    xn = [t[1] for t in rbc.indices]
+    xm_R = [t[0] for t in rbc.indices]
+    xn_R = [t[1] for t in rbc.indices]
+    xm_Z = [t[0] for t in zbs.indices]
+    xn_Z = [t[1] for t in zbs.indices]
 
-    return FourierArray(xm, xn, [rbc.array]), FourierArray(xm, xn, None, [zbs.array])
+    return FourierArray(xm_R, xn_R, rbc.array), FourierArray(xm_Z, xn_Z, None, zbs.array)
