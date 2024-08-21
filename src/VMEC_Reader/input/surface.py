@@ -4,7 +4,7 @@ from typing import Tuple
 
 import numpy as np
 
-def input_file_surface(input_file: InputFile) -> Tuple[FourierArray, FourierArray]:
+def input_file_boundary(input_file: InputFile) -> Tuple[FourierArray, FourierArray]:
     """
     Converts the input file surface guess to a FourierArray
 
@@ -33,9 +33,9 @@ def input_file_surface(input_file: InputFile) -> Tuple[FourierArray, FourierArra
     if rbc.indices != zbs.indices:
         raise ValueError("The rbc and zbs variables should have the same mode indices")
     
-    xm_R = [t[0] for t in rbc.indices]
-    xn_R = [t[1] for t in rbc.indices]
-    xm_Z = [t[0] for t in zbs.indices]
-    xn_Z = [t[1] for t in zbs.indices]
+    xm_R = np.array([t[0] for t in rbc.indices])
+    xn_R = np.array([t[1] for t in rbc.indices])
+    xm_Z = np.array([t[0] for t in zbs.indices])
+    xn_Z = np.array([t[1] for t in zbs.indices])
 
     return FourierArray(xm_R, xn_R, rbc.array), FourierArray(xm_Z, xn_Z, None, zbs.array)

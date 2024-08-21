@@ -3,7 +3,7 @@ from .data import IndexedArray
 from .parameters import InputFile, InputGroup, InputSection, InputVariable
 from .profiles import Profile, get_pressure, get_safety, get_iota, get_rotation, get_temperature, set_profile
 from .coils import CoilFile, Coil, CoilGroup
-from .surface import input_file_surface
+from .surface import input_file_boundary
 from .helpers import set_poloidal_flux_mode, set_toroidal_flux_mode
 
 __all__ = [
@@ -22,7 +22,7 @@ __all__ = [
     "CoilFile",
     "Coil",
     "CoilGroup",
-    "input_file_surface",
+    "input_file_boundary",
     "set_profile",
     "set_poloidal_flux_mode",
     "set_toroidal_flux_mode",
