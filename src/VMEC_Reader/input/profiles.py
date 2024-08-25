@@ -85,7 +85,6 @@ class Profile:
                 poly_resolution = len(self.data)
             xs = np.linspace(0, 1, 100)
             ys = func(np.polyval(self.data, xs))
-            print(ys)
             out.data = np.polyfit(xs, ys, poly_resolution)
 
         return out
@@ -95,11 +94,12 @@ class Profile:
         if self.ptype == "power_series":
             xs = np.linspace(0, 1, x_resolution)
             ys = np.polyval(self.data, xs)
+            return xs, ys
         elif self.ptype == "cubic_spline":
             xs = self.xs
             ys = self.data
+            return xs, ys
 
-        return xs, ys
 
 
 def set_profile(input_file: InputFile, profile: Profile, pname: str, short_name: str):

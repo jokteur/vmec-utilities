@@ -128,6 +128,9 @@ class InputGroup:
         self.description__: str = description
         self.no_group_check__: bool = no_group_check
 
+    def copy(self) -> Type["InputGroup"]:
+        return InputGroup(self.cls__, self.variables__, self.description__)
+
     def match(self, var_name: str) -> bool:
         for var in self.variables__:
             split = var.split("*")
@@ -235,6 +238,15 @@ class InputSection:
                     self.variables[var_name].description = desc.strip() + " ; " + comment
                 else:
                     self.variables[var_name].description = comment
+    
+    def __init__(self, name: str, variables: Dict[str, InputVariable], groups: Dict[str, Tuple[List[str], str]], dummy_arg):
+        self.variables = variables
+        self.groups = groups
+        self.name = name
+
+    def copy(self) -> "InputSection":
+        new_section = InputSection(self.name, self.variables, self.groups, 1)
+        return new_section
 
     def __getattr__(self, var_name: str) -> Union[InputGroup, InputVariable]:
         """
@@ -401,6 +413,9 @@ class InputFile:
 
             self.sections[section_name] = InputSection(section_name, input_vars, section_group)
 
+    def __init__(self, sections: Dict[str, InputSection]):
+        self.sections = sections
+
     def __getattr__(self, attr: str) -> Union[InputSection, InputGroup, InputVariable]:
         """
         Finds first a section with the name, then an input group in all the sections,
@@ -422,6 +437,11 @@ class InputFile:
                     return section.variables[attr]
 
         raise AttributeError(f"Could not find '{attr}' anywhere in the input file.")
+    
+    def copy(self):
+        sections = {name: section.copy() for name, section in self.sections.items()}
+        return InputFile(sections)
+
     
     def set_variable(self, var_name: str, data: Any, type: type):
         """
