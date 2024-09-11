@@ -17,7 +17,7 @@ def plot_RZ_surfaces(
     labels: str = None,
     magnetic_axis: bool = True,
     num_theta: int = 100,
-    suptitle: str = "Magnetic surfaces",
+    suptitle: List[str] = "Magnetic surfaces",
     phi_titles=None,
     fig_kwargs: dict = {},
     plt_kwargs: dict = {"marker": None, "linewidth": 1},
@@ -43,12 +43,12 @@ def plot_RZ_surfaces(
             if only a float, plots only one angle
         labels: str or None
             if supplied, list of labels for the list of R and Z (for comparing plots)
-        colors: str or None
-            if supplied, list of colors for the list of R and Z (for comparing plots)
         magnetic_axis: bool
             plot the magnetic axis at the current angle
         num_theta: int
             number of theta points
+        suptitle: str or tuple containing str and dict of arguments
+            title of the figure or title with arguments
         fig_kwargs: dict
             arguments for the matplotlib figure() function
         plt_kwargs: dict
@@ -119,7 +119,10 @@ def plot_RZ_surfaces(
     theta = np.linspace(0, 2 * np.pi, num_theta)
 
     fig = plt.figure(**fig_kwargs)
-    fig.suptitle(suptitle)
+    if isinstance(suptitle, str):
+        fig.suptitle(suptitle)
+    else:
+        fig.suptitle(suptitle[0], **suptitle[1])
 
     gs = gridspec.GridSpec(xlen, ylen)
     axs = [plt.subplot(gs[i]) for i in range(num_plots)]
@@ -161,13 +164,20 @@ def plot_RZ_surfaces(
                 ax.set_title(phi_titles[j])
             else:
                 ax.set_title(rf"$\phi = {np.round(phi, 3)}$")
-            if shared_axis and len(phi_angles) > 2:
-                if j // 2 == 1:
+            if shared_axis and len(phi_angles) > 1:
+                if len(phi_angles) == 2:
+                    if j == 0:
+                        ax.set_ylabel(r"$Z$ (m)")
+                    if j == 1:
+                        ax.set_yticks([])
                     ax.set_xlabel(r"$R$ (m)")
-                if j % 2 == 0:
-                    ax.set_ylabel(r"$Z$ (m)")
-                if j < 2:
-                    ax.set_xticks([])
+                else:
+                    if j // 2 == 1:
+                        ax.set_xlabel(r"$R$ (m)")
+                    if j % 2 == 0:
+                        ax.set_ylabel(r"$Z$ (m)")
+                    if j < 2:
+                        ax.set_xticks([])
             else:
                 ax.set_xlabel(r"$R$ (m)")
                 ax.set_ylabel(r"$Z$ (m)")
