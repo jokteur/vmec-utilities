@@ -108,7 +108,7 @@ def fast_coeff_coeff(
                     coeff_idx
                 ] * numba_sin(val)
 
-    # return out_array
+    return out_array
 
 
 class FourierArray:
@@ -401,6 +401,7 @@ class FourierArray:
             x = lambda arg: numba_fct(*arg)
 
             for i, result in enumerate(executor.map(x, args)):
+                # print("hello", result)
                 array_out[..., i, :] = result.squeeze()
         else:
             numba_fct(
